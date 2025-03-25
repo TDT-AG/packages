@@ -350,9 +350,7 @@ snmpd_configure_logging() {
 	local cfg="$1"
 	local log_syslog
 	local log_syslog_facility
-	local log_syslog_priority
 	local log_file
-	local log_file_path
 	local log_file_priority
 
 	config_get_bool log_syslog "$cfg" log_syslog 0
@@ -372,18 +370,21 @@ snmpd_configure_logging() {
 
 	if [ $log_syslog -eq 1 ]; then
 		config_get log_syslog_facility "$cfg" log_syslog_facility "d"
-		config_get log_syslog_priority "$cfg" log_syslog_priority "i"
 
-		procd_append_param command "-LS ${log_syslog_priority} ${log_syslog_facility}"
+		procd_append_param command -Ls "${log_syslog_facility}"
 	fi
 
-	config_get log_file_path "$cfg" log_file_path
+	config_get log_file "$cfg" log_file
 
-	if [ -n "$log_file_path" ]; then
+	if [ -n "$log_file" ]; then
 		config_get log_file_priority "$cfg" log_file_priority "i"
 
-		mkdir -p "$(dirname "${log_file_path}")"
-		procd_append_param command "-LF ${log_file_priority} ${log_file_path}"
+		mkdir -p "$(dirname "${log_file}")"
+		procd_append_param command -LF "${log_file_priority} ${log_file}"
+	fi
+
+	if [ "$log_syslog" -eq 0 ] && [ -z "$log_file" ]; then
+		procd_append_param command -Lf /dev/null
 	fi
 }
 
@@ -425,10 +426,10 @@ start_service() {
 	append_parm v1trapaddress host v1trapaddress
 	append_parm trapsess trapsess trapsess
 	config_foreach snmpd_snmpv3_add v3 general
-	config_foreach snmpd_configure_logging log
 
 	procd_set_param command $PROG -f -r -p "$pid_file"
 	procd_append_param command -C -c "$CONFIGFILE"
+	config_foreach snmpd_configure_logging log
 	procd_set_param respawn
 
 	for iface in $(ls /sys/class/net 2>/dev/null); do
